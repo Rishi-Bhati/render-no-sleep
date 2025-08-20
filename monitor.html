@@ -1,0 +1,243 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Render Keep-Alive Monitor</title>
+  <style>
+    :root {
+      --bg: #0b1220;
+      --fg: #e5e7eb;
+      --muted: #9aa3b2;
+      --primary: #22d3ee;
+      --success: #10b981;
+      --error: #ef4444;
+      --card: rgba(255,255,255,0.06);
+      --card-border: rgba(255,255,255,0.12);
+    }
+    
+    * { box-sizing: border-box; }
+    
+    body {
+      margin: 0;
+      font-family: ui-sans-serif, system-ui, -apple-system, sans-serif;
+      background: var(--bg);
+      color: var(--fg);
+      line-height: 1.6;
+      padding: 20px;
+      min-height: 100vh;
+    }
+    
+    .container {
+      max-width: 800px;
+      margin: 0 auto;
+    }
+    
+    h1 {
+      margin: 0 0 10px;
+      font-size: 28px;
+    }
+    
+    .subtitle {
+      color: var(--muted);
+      margin-bottom: 30px;
+    }
+    
+    .card {
+      background: var(--card);
+      border: 1px solid var(--card-border);
+      border-radius: 12px;
+      padding: 20px;
+      margin-bottom: 20px;
+    }
+    
+    .status {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      margin-bottom: 15px;
+    }
+    
+    .status-dot {
+      width: 12px;
+      height: 12px;
+      border-radius: 50%;
+      background: var(--muted);
+    }
+    
+    .status-dot.success { background: var(--success); }
+    .status-dot.error { background: var(--error); }
+    
+    .btn {
+      padding: 10px 20px;
+      border: none;
+      border-radius: 8px;
+      font-weight: 600;
+      cursor: pointer;
+      background: var(--primary);
+      color: var(--bg);
+      transition: opacity 0.2s;
+    }
+    
+    .btn:hover { opacity: 0.9; }
+    .btn:disabled { opacity: 0.5; cursor: not-allowed; }
+    
+    .log {
+      background: rgba(0,0,0,0.3);
+      border: 1px solid var(--card-border);
+      border-radius: 8px;
+      padding: 15px;
+      font-family: monospace;
+      font-size: 14px;
+      max-height: 300px;
+      overflow-y: auto;
+      white-space: pre-wrap;
+      word-break: break-all;
+    }
+    
+    .log-entry {
+      margin-bottom: 10px;
+      padding-bottom: 10px;
+      border-bottom: 1px solid var(--card-border);
+    }
+    
+    .log-entry:last-child {
+      margin-bottom: 0;
+      padding-bottom: 0;
+      border-bottom: none;
+    }
+    
+    .timestamp {
+      color: var(--muted);
+      font-size: 12px;
+    }
+    
+    .info {
+      background: rgba(34,211,238,0.1);
+      border: 1px solid rgba(34,211,238,0.3);
+      border-radius: 8px;
+      padding: 15px;
+      margin-bottom: 20px;
+    }
+    
+    .back-link {
+      color: var(--primary);
+      text-decoration: none;
+      display: inline-flex;
+      align-items: center;
+      gap: 5px;
+      margin-bottom: 20px;
+    }
+    
+    .back-link:hover { text-decoration: underline; }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <a href="/" class="back-link">← Back to Naggering Bot</a>
+    
+    <h1>Render Keep-Alive Monitor</h1>
+    <p class="subtitle">Monitoring: https://thenagger.onrender.com/health</p>
+    
+    <div class="info">
+      <strong>ℹ️ Automatic Pinging:</strong> This site automatically pings your Render app every 10 minutes using Vercel Cron Jobs to prevent it from sleeping.
+    </div>
+    
+    <div class="card">
+      <h2 style="margin-top: 0;">Manual Ping Test</h2>
+      <div class="status">
+        <div class="status-dot" id="statusDot"></div>
+        <span id="statusText">Ready to ping</span>
+      </div>
+      <button class="btn" id="pingBtn" onclick="performPing()">Ping Now</button>
+    </div>
+    
+    <div class="card">
+      <h2 style="margin-top: 0;">Ping Log</h2>
+      <div class="log" id="pingLog">
+        <div class="log-entry">Waiting for first ping...</div>
+      </div>
+    </div>
+  </div>
+  
+  <script>
+    let isLoading = false;
+    const logEntries = [];
+    const maxLogEntries = 20;
+    
+    function updateStatus(status, message) {
+      const dot = document.getElementById('statusDot');
+      const text = document.getElementById('statusText');
+      
+      dot.className = 'status-dot';
+      if (status === 'success') dot.classList.add('success');
+      else if (status === 'error') dot.classList.add('error');
+      
+      text.textContent = message;
+    }
+    
+    function addLogEntry(entry) {
+      logEntries.unshift(entry);
+      if (logEntries.length > maxLogEntries) {
+        logEntries.pop();
+      }
+      
+      const logDiv = document.getElementById('pingLog');
+      logDiv.innerHTML = logEntries.map(e => `
+        <div class="log-entry">
+          <div class="timestamp">${e.timestamp}</div>
+          <div>${e.message}</div>
+          ${e.details ? `<div style="color: var(--muted); font-size: 12px;">${e.details}</div>` : ''}
+        </div>
+      `).join('');
+    }
+    
+    async function performPing() {
+      if (isLoading) return;
+      
+      const btn = document.getElementById('pingBtn');
+      isLoading = true;
+      btn.disabled = true;
+      btn.textContent = 'Pinging...';
+      updateStatus('', 'Pinging...');
+      
+      try {
+        const response = await fetch('/api/ping');
+        const data = await response.json();
+        
+        if (data.success) {
+          updateStatus('success', 'Ping successful!');
+          addLogEntry({
+            timestamp: new Date().toLocaleString(),
+            message: `✅ Ping successful - Status: ${data.response.status}`,
+            details: `Response: ${data.response.body || 'OK'}`
+          });
+        } else {
+          updateStatus('error', 'Ping failed');
+          addLogEntry({
+            timestamp: new Date().toLocaleString(),
+            message: `❌ Ping failed`,
+            details: `Error: ${data.error}`
+          });
+        }
+      } catch (error) {
+        updateStatus('error', 'Request failed');
+        addLogEntry({
+          timestamp: new Date().toLocaleString(),
+          message: `❌ Request failed`,
+          details: `Error: ${error.message}`
+        });
+      } finally {
+        isLoading = false;
+        btn.disabled = false;
+        btn.textContent = 'Ping Now';
+      }
+    }
+    
+    // Initial ping on load
+    window.addEventListener('load', () => {
+      setTimeout(performPing, 1000);
+    });
+  </script>
+</body>
+</html>

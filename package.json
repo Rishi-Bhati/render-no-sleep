@@ -1,0 +1,22 @@
+{
+  "name": "render-no-sleep",
+  "version": "1.0.0",
+  "description": "Keep Render site awake by pinging it every 10 minutes",
+  "main": "index.js",
+  "scripts": {
+    "dev": "vercel dev",
+    "deploy": "vercel --prod"
+  },
+  "keywords": [
+    "render",
+    "keep-alive",
+    "ping",
+    "vercel"
+  ],
+  "author": "Rishi",
+  "license": "MIT",
+  "dependencies": {
+    "node-fetch": "^3.3.2"
+  },
+  "type": "module"
+}
